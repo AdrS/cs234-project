@@ -19,3 +19,17 @@
    ```
    pip install -r requirements.txt
    ```
+
+4. Run the example
+
+   ```
+   python example.py  --visualize
+   ```
+
+# Contributing
+
+Please format the code before submitting changes.
+
+   ```
+   python -m black *.py
+   ```

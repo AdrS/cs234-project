@@ -13,7 +13,7 @@ def main(env_name, render_mode, args):
         action = env.action_space.sample()
         observation, reward, terminated, truncated, info = env.step(action)
         if terminated or truncated:
-            observation, info = env.reset(seed=seed)
+            observation, info = env.reset(seed=args.env_seed)
     env.close()
 
 
@@ -23,9 +23,8 @@ if __name__ == "__main__":
         "--environment",
         type=str,
         choices=["AntMaze", "PointMaze"],
-        required=True,
         default="PointMaze",
-        help="What environment to simulate",
+        help="What environment to simulate.",
     )
     parser.add_argument(
         "--env_seed",
@@ -33,17 +32,17 @@ if __name__ == "__main__":
         default=42,
         help="Seed for randomness in the environment.",
     )
-    parser.add_argument("--maze_size", type=int, default=2, help="Size of the maze")
+    parser.add_argument("--maze_size", type=int, default=2, help="Size of the maze.")
     parser.add_argument(
         "--maze_seed", type=int, default=2025, help="Seed for generating the maze."
     )
     parser.add_argument(
-        "--steps", type=int, default=1000, help="Number of steps to simulate"
+        "--steps", type=int, default=1000, help="Number of steps to simulate."
     )
     parser.add_argument(
         "--visualize",
         action="store_true",
-        help="Show a visualization of the environment",
+        help="Show a visualization of the environment.",
     )
     args = parser.parse_args()
     full_env_names = {"PointMaze": "PointMaze_UMaze-v3", "AntMaze": "AntMaze_UMaze-v5"}

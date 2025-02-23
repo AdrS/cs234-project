@@ -1,2 +1,3 @@
+black
 gymnasium-robotics
 mujoco
