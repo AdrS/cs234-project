@@ -11,6 +11,7 @@ import time
 from stable_baselines3.common.callbacks import BaseCallback
 
 algorithms_by_name = {
+    "VPG": VanillaPolicyGradients,
     "A2C": sb3.A2C,
     "DDPG": sb3.DDPG,
     "PPO": sb3.PPO,

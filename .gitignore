@@ -1,0 +1,4 @@
+.DS_Store
+mujoco-*
+mujoco-3.2.7/
+__pycache__/cs234-project/
