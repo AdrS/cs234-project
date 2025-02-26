@@ -2,23 +2,41 @@ import argparse
 import gymnasium as gym
 import gymnasium_robotics
 import maze
+import stable_baselines3 as sb3
 
+algorithms_by_name = {
+    "A2C": sb3.A2C,
+    "DDPG": sb3.DDPG,
+    "PPO": sb3.PPO,
+}
 
 def main(env_name, render_mode, args):
     gym.register_envs(gymnasium_robotics)
     maze_map = maze.dfs_generate(args.maze_size, args.maze_seed)
-    env = gym.make(env_name, render_mode=render_mode, maze_map=maze_map)
-    observation, info = env.reset(seed=args.env_seed)
+    env = gym.make(env_name, render_mode="rgb_array", maze_map=maze_map)
+    model_constructor = algorithms_by_name.get(args.algorithm)
+    if model_constructor is None:
+        raise ValueError(f"Unknown algorithm: {args.algorithm}")
+    model = model_constructor("MultiInputPolicy", env, verbose=1)
+    model.learn(total_timesteps=10_000)
+
+    vec_env = model.get_env()
+    observation = vec_env.reset()
     for _ in range(args.steps):
-        action = env.action_space.sample()
-        observation, reward, terminated, truncated, info = env.step(action)
-        if terminated or truncated:
-            observation, info = env.reset(seed=args.env_seed)
-    env.close()
+        action, state = model.predict(observation, deterministic=True)
+        observation, reward, done, info = vec_env.step(action)
+        vec_env.render("human")
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
+    parser.add_argument(
+        "--algorithm",
+        type=str,
+        choices=sorted(list(algorithms_by_name.keys())),
+        default="PPO",
+        help="What reinforcement learning algorithm to use.",
+    )
     parser.add_argument(
         "--environment",
         type=str,
