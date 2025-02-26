@@ -2,7 +2,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 import numpy as np
-import gym
+try:
+    import gym
+except:
+    import gymnasium as gym
 
 
 class PolicyNetwork(nn.Module):
