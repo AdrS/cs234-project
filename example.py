@@ -19,6 +19,13 @@ algorithms_by_name = {
     "PPO": sb3.PPO,
 }
 
+full_env_names = {
+    "PointMazeSparse": "PointMaze_UMaze-v3",
+    "AntMazeSparse": "AntMaze_UMaze-v5",
+    "PointMazeDense": "PointMaze_UMazeDense-v3",
+    "AntMazeDense": "AntMaze_UMazeDense-v5",
+}
+
 # Evaluate and EvalCallback are copied from assignment 3.
 def evaluate(env, policy):
     model_return = 0
@@ -87,21 +94,6 @@ def main(env_name, render_mode, args):
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
     agent = algorithm_constructor("MultiInputPolicy", env, verbose=1)
     
-    # finetuning PPO
-    agent = sb3.PPO(
-        "MultiInputPolicy",
-        env,
-        learning_rate=0.0003,   
-        batch_size=64,      
-        n_steps=2048, 
-        gamma=0.99,   
-        gae_lambda=0.95,    
-        clip_range=0.2,        
-        ent_coef=0.01,          # for exploration
-        verbose=1
-    )
-
-    
     eval_callback = EvalCallback(
         eval_period=args.steps // 100,
         num_episodes=10,
@@ -134,8 +126,8 @@ if __name__ == "__main__":
     parser.add_argument(
         "--environment",
         type=str,
-        choices=["AntMaze", "PointMaze"],
-        default="PointMaze",
+        choices=sorted(list(full_env_names.keys())),
+        default="PointMazeDense",
         help="What environment to simulate.",
     )
     parser.add_argument(
@@ -166,6 +158,5 @@ if __name__ == "__main__":
         help="Where to save models, results, plots, etc.",
     )
     args = parser.parse_args()
-    full_env_names = {"PointMaze": "PointMaze_UMaze-v3", "AntMaze": "AntMaze_UMaze-v5"}
     render_mode = "human" if args.visualize else None
     main(full_env_names[args.environment], render_mode, args)

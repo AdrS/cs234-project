@@ -3,9 +3,9 @@ import torch.nn as nn
 import torch.optim as optim
 import numpy as np
 try:
-    import gym
-except:
     import gymnasium as gym
+except ImportError:
+    import gym
 
 
 class PolicyNetwork(nn.Module):
