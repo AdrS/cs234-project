@@ -1,5 +1,6 @@
 black
 gymnasium-robotics
+gym
 mujoco
 stable-baselines3[extra]
 black

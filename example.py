@@ -9,9 +9,11 @@ import pathlib
 import stable_baselines3 as sb3
 import time
 from stable_baselines3.common.callbacks import BaseCallback
+from vpg import VanillaPolicyGradient
+
 
 algorithms_by_name = {
-    "VPG": VanillaPolicyGradients,
+    "VPG": VanillaPolicyGradient,
     "A2C": sb3.A2C,
     "DDPG": sb3.DDPG,
     "PPO": sb3.PPO,
