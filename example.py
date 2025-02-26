@@ -58,9 +58,11 @@ def plot_returns(returns, path):
     plt.figure()
     plt.plot(range(len(returns)), returns)
     plt.xlabel("Training Episode")
-    # TODO(adrs): labels and titles
-    #plt.ylabel(ylabel)
-    #plt.title(title)
+    plt.ylabel("Average Return")
+    plt.title("Training Performance Over Time")
+    plt.legend()
+    plt.grid(True)
+    
     plt.savefig(path)
     plt.close()
 
@@ -84,6 +86,22 @@ def main(env_name, render_mode, args):
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
     agent = algorithm_constructor("MultiInputPolicy", env, verbose=1)
+    
+    # finetuning PPO
+    agent = sb3.PPO(
+        "MultiInputPolicy",
+        env,
+        learning_rate=0.0003,   
+        batch_size=64,      
+        n_steps=2048, 
+        gamma=0.99,   
+        gae_lambda=0.95,    
+        clip_range=0.2,        
+        ent_coef=0.01,          # for exploration
+        verbose=1
+    )
+
+    
     eval_callback = EvalCallback(
         eval_period=args.steps // 100,
         num_episodes=10,
