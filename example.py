@@ -8,6 +8,7 @@ import numpy as np
 import os
 import pathlib
 import stable_baselines3 as sb3
+import subprocess
 import time
 from stable_baselines3.common.callbacks import BaseCallback
 from types import SimpleNamespace
@@ -149,12 +150,38 @@ def visualize(args):
         observation, reward, done, info = vec_env.step(action)
         vec_env.render("human")
 
+def check_for_uncommitted_changes():
+    '''Checks whether there are uncommitted or untracked files in the repo.
+
+    Returns:
+      (<has changed files?>, <list of changed files>).
+    '''
+    output = subprocess.check_output(
+        ['git', 'status', '--porcelain']).decode('utf-8').strip()
+    changed_files = output.split('\n')
+    return len(changed_files) > 0, changed_files
+
+def get_current_git_hash():
+    'Returns the commit hash of the currently checked-out commit'
+
+    git_hash = subprocess.check_output(
+        ['git', 'rev-parse', '@']).decode('utf-8').strip()
+    has_uncommitted_changes, uncommitted_changes = check_for_uncommitted_changes()
+    if has_uncommitted_changes:
+        print('WARNING: uncommitted changes or untracked files')
+        print('\n'.join(uncommitted_changes))
+        return git_hash + ' uncommitted changes'
+    else:
+        return git_hash
 
 def save_config(output_dir, config):
+    git_hash = get_current_git_hash()
     os.makedirs(output_dir)
     config_path = os.path.join(output_dir, "config.json")
     with open(config_path, "w") as config_file:
-        json.dump(vars(config), config_file)
+        config_dict = vars(config)
+        config_dict['git_hash'] = git_hash
+        json.dump(config_dict, config_file)
 
 
 def load_config(output_dir):
