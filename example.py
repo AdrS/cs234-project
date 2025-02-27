@@ -1,4 +1,5 @@
 import argparse
+import json
 import gymnasium as gym
 import gymnasium_robotics
 import matplotlib.pyplot as plt
@@ -9,6 +10,7 @@ import pathlib
 import stable_baselines3 as sb3
 import time
 from stable_baselines3.common.callbacks import BaseCallback
+from types import SimpleNamespace
 from vpg import VanillaPolicyGradient
 
 
@@ -22,31 +24,31 @@ algorithms_by_name = {
 }
 
 
-def get_agent(args, env):
-    algorithm_constructor = algorithms_by_name.get(args.algorithm)
+def get_agent(config, env):
+    algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
-        raise ValueError(f"Unknown algorithm: {args.algorithm}")
+        raise ValueError(f"Unknown algorithm: {config.algorithm}")
     return algorithm_constructor("MultiInputPolicy", env, verbose=1)
 
 
-def create_maze(env_name, args):
-    maze_map = maze.dfs_generate(args.maze_size, args.maze_seed)
+def create_maze(env_name, config):
+    maze_map = maze.dfs_generate(config.maze_size, config.maze_seed)
     return gym.make(env_name, render_mode="rgb_array", maze_map=maze_map)
 
 
 environments_by_name = {
-    "PointMazeSparse": lambda args: create_maze("PointMaze_UMaze-v3", args),
-    "AntMazeSparse": lambda args: create_maze("AntMaze_UMaze-v5", args),
-    "PointMazeDense": lambda args: create_maze("PointMaze_UMazeDense-v3", args),
-    "AntMazeDense": lambda args: create_maze("AntMaze_UMazeDense-v5", args),
+    "PointMazeSparse": lambda config: create_maze("PointMaze_UMaze-v3", config),
+    "AntMazeSparse": lambda config: create_maze("AntMaze_UMaze-v5", config),
+    "PointMazeDense": lambda config: create_maze("PointMaze_UMazeDense-v3", config),
+    "AntMazeDense": lambda config: create_maze("AntMaze_UMazeDense-v5", config),
 }
 
 
-def get_environment(args):
-    environment_constructor = environments_by_name.get(args.environment)
+def get_environment(config):
+    environment_constructor = environments_by_name.get(config.environment)
     if environment_constructor is None:
-        raise ValueError(f"Unknown environment: {args.environment}")
-    return environment_constructor(args)
+        raise ValueError(f"Unknown environment: {config.environment}")
+    return environment_constructor(config)
 
 
 # Evaluate and EvalCallback are copied from assignment 3.
@@ -110,42 +112,60 @@ def save_results(output_dir, agent, eval_callback):
     returns_path = os.path.join(output_dir, "returns.npy")
     returns_plot_path = os.path.join(output_dir, "returns.png")
 
-    os.makedirs(output_dir, exist_ok=True)
     agent.save(model_path)
     np.save(returns_path, eval_callback.returns)
     plot_returns(eval_callback.returns, returns_plot_path)
 
 
-def train(args):
+def train(config):
     dir_name = time.strftime("%y%m%d-%H-%M-%S")
-    output_dir = os.path.join(args.output_dir_prefix, dir_name)
+    output_dir = os.path.join(config.output_dir_prefix, dir_name)
+    save_config(output_dir, config)
 
-    env = get_environment(args)
-    agent = get_agent(args, env)
+    env = get_environment(config)
+    agent = get_agent(config, env)
 
     eval_callback = EvalCallback(
-        eval_period=args.steps // 100,
+        eval_period=config.steps // 100,
         num_episodes=10,
         env=env,
         agent=agent,
         output_dir=output_dir,
     )
-    agent.learn(total_timesteps=args.steps, callback=eval_callback)
+    agent.learn(total_timesteps=config.steps, callback=eval_callback)
     save_results(output_dir, agent, eval_callback)
 
 
 def visualize(args):
-    env = get_environment(args)
-    agent = get_agent(args, env)
+    config = load_config(args.saved_model_dir)
+    env = get_environment(config)
+    agent = get_agent(config, env)
+    model_path = os.path.join(args.saved_model_dir, "model.zip")
+    agent.load(model_path)
     vec_env = agent.get_env()
     observation = vec_env.reset()
-    for _ in range(args.visualization_steps):
+    for _ in range(config.visualization_steps):
         action, state = agent.predict(observation, deterministic=True)
         observation, reward, done, info = vec_env.step(action)
         vec_env.render("human")
 
 
-if __name__ == "__main__":
+def save_config(output_dir, config):
+    os.makedirs(output_dir)
+    config_path = os.path.join(output_dir, "config.json")
+    with open(config_path, "w") as config_file:
+        json.dump(vars(config), config_file)
+
+
+def load_config(output_dir):
+    config_path = os.path.join(output_dir, "config.json")
+    with open(config_path, "r") as config_file:
+        return json.load(
+            config_file, object_hook=lambda fields: SimpleNamespace(**fields)
+        )
+
+
+def get_args():
     parser = argparse.ArgumentParser()
 
     # Shared arguments
@@ -187,9 +207,9 @@ if __name__ == "__main__":
 
     # Visualization arguments
     parser.add_argument(
-        "--saved_model",
+        "--saved_model_dir",
         type=str,
-        help="Path to a model to visualize.",
+        help="Path to the config for a trained model.",
     )
     parser.add_argument(
         "--visualization_steps",
@@ -197,9 +217,12 @@ if __name__ == "__main__":
         default=1000,
         help="Number of steps to show at the end.",
     )
+    return parser.parse_args()
 
-    args = parser.parse_args()
-    if args.saved_model is not None:
+
+if __name__ == "__main__":
+    args = get_args()
+    if args.saved_model_dir is not None:
         visualize(args)
     else:
         train(args)
