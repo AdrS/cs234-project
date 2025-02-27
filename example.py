@@ -77,8 +77,14 @@ class EvalCallback(BaseCallback):
         # action.
         self.agent = agent
         self.policy = lambda observation: agent.predict(observation)[0]
-        self.returns = []
         self.output_dir = output_dir
+
+        # Metrics
+        self.returns = []
+        self.start_time = time.time()
+
+    def get_current_metrics(self):
+        return {"training_time": time.time() - self.start_time, "returns": self.returns}
 
     def _on_step(self):
         if self.n_calls % self.eval_period == 0:
@@ -112,16 +118,19 @@ def save_results(output_dir, agent, eval_callback):
     model_path = os.path.join(output_dir, "model.zip")
     returns_path = os.path.join(output_dir, "returns.npy")
     returns_plot_path = os.path.join(output_dir, "returns.png")
+    metrics_path = os.path.join(output_dir, "metrics.json")
 
     agent.save(model_path)
     np.save(returns_path, eval_callback.returns)
     plot_returns(eval_callback.returns, returns_plot_path)
+    save_json(eval_callback.get_current_metrics(), metrics_path)
 
 
 def train(config):
     dir_name = time.strftime("%y%m%d-%H-%M-%S")
     output_dir = os.path.join(config.output_dir_prefix, dir_name)
     save_config(output_dir, config)
+    metrics = {}
 
     env = get_environment(config)
     agent = get_agent(config, env)
@@ -150,38 +159,50 @@ def visualize(args):
         observation, reward, done, info = vec_env.step(action)
         vec_env.render("human")
 
+
 def check_for_uncommitted_changes():
-    '''Checks whether there are uncommitted or untracked files in the repo.
+    """Checks whether there are uncommitted or untracked files in the repo.
 
     Returns:
       (<has changed files?>, <list of changed files>).
-    '''
-    output = subprocess.check_output(
-        ['git', 'status', '--porcelain']).decode('utf-8').strip()
-    changed_files = output.split('\n')
+    """
+    output = (
+        subprocess.check_output(["git", "status", "--porcelain"])
+        .decode("utf-8")
+        .strip()
+    )
+    changed_files = output.split("\n")
     return len(changed_files) > 0, changed_files
 
-def get_current_git_hash():
-    'Returns the commit hash of the currently checked-out commit'
 
-    git_hash = subprocess.check_output(
-        ['git', 'rev-parse', '@']).decode('utf-8').strip()
+def get_current_git_hash():
+    "Returns the commit hash of the currently checked-out commit"
+
+    git_hash = (
+        subprocess.check_output(["git", "rev-parse", "@"]).decode("utf-8").strip()
+    )
     has_uncommitted_changes, uncommitted_changes = check_for_uncommitted_changes()
     if has_uncommitted_changes:
-        print('WARNING: uncommitted changes or untracked files')
-        print('\n'.join(uncommitted_changes))
-        return git_hash + ' uncommitted changes'
+        print("WARNING: uncommitted changes or untracked files")
+        print("\n".join(uncommitted_changes))
+        return git_hash + " uncommitted changes"
     else:
         return git_hash
 
+
+def save_json(obj, path):
+    with open(path, "w") as f:
+        json.dump(obj, f)
+
+
 def save_config(output_dir, config):
     git_hash = get_current_git_hash()
+    config_dict = vars(config)
+    config_dict["git_hash"] = git_hash
+
     os.makedirs(output_dir)
     config_path = os.path.join(output_dir, "config.json")
-    with open(config_path, "w") as config_file:
-        config_dict = vars(config)
-        config_dict['git_hash'] = git_hash
-        json.dump(config_dict, config_file)
+    save_json(config_dict, config_path)
 
 
 def load_config(output_dir):
