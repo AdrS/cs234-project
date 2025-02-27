@@ -21,9 +21,18 @@ algorithms_by_name = {
     "PPO": sb3.PPO,
 }
 
+
+def get_agent(args, env):
+    algorithm_constructor = algorithms_by_name.get(args.algorithm)
+    if algorithm_constructor is None:
+        raise ValueError(f"Unknown algorithm: {args.algorithm}")
+    return algorithm_constructor("MultiInputPolicy", env, verbose=1)
+
+
 def create_maze(env_name, args):
     maze_map = maze.dfs_generate(args.maze_size, args.maze_seed)
     return gym.make(env_name, render_mode="rgb_array", maze_map=maze_map)
+
 
 environments_by_name = {
     "PointMazeSparse": lambda args: create_maze("PointMaze_UMaze-v3", args),
@@ -31,6 +40,14 @@ environments_by_name = {
     "PointMazeDense": lambda args: create_maze("PointMaze_UMazeDense-v3", args),
     "AntMazeDense": lambda args: create_maze("AntMaze_UMazeDense-v5", args),
 }
+
+
+def get_environment(args):
+    environment_constructor = environments_by_name.get(args.environment)
+    if environment_constructor is None:
+        raise ValueError(f"Unknown environment: {args.environment}")
+    return environment_constructor(args)
+
 
 # Evaluate and EvalCallback are copied from assignment 3.
 def evaluate(env, policy):
@@ -74,6 +91,7 @@ class EvalCallback(BaseCallback):
         # If the callback returns False, training is aborted early.
         return True
 
+
 def plot_returns(returns, path):
     plt.figure()
     plt.plot(range(len(returns)), returns)
@@ -82,43 +100,43 @@ def plot_returns(returns, path):
     plt.title("Training Performance Over Time")
     plt.legend()
     plt.grid(True)
-    
+
     plt.savefig(path)
     plt.close()
 
+
 def save_results(output_dir, agent, eval_callback):
-    model_path = os.path.join(output_dir, 'model.zip')
-    returns_path = os.path.join(output_dir, 'returns.npy')
-    returns_plot_path = os.path.join(output_dir, 'returns.png')
+    model_path = os.path.join(output_dir, "model.zip")
+    returns_path = os.path.join(output_dir, "returns.npy")
+    returns_plot_path = os.path.join(output_dir, "returns.png")
 
     os.makedirs(output_dir, exist_ok=True)
     agent.save(model_path)
     np.save(returns_path, eval_callback.returns)
     plot_returns(eval_callback.returns, returns_plot_path)
 
-def train(render_mode, args):
-    dir_name = time.strftime('%y%m%d-%H-%M-%S')
+
+def train(args):
+    dir_name = time.strftime("%y%m%d-%H-%M-%S")
     output_dir = os.path.join(args.output_dir_prefix, dir_name)
 
-    environment_constructor = environments_by_name.get(args.environment)
-    if environment_constructor is None:
-        raise ValueError(f"Unknown environment: {args.environment}")
-    env = environment_constructor(args)
-    algorithm_constructor = algorithms_by_name.get(args.algorithm)
-    if algorithm_constructor is None:
-        raise ValueError(f"Unknown algorithm: {args.algorithm}")
-    agent = algorithm_constructor("MultiInputPolicy", env, verbose=1)
-    
+    env = get_environment(args)
+    agent = get_agent(args, env)
+
     eval_callback = EvalCallback(
         eval_period=args.steps // 100,
         num_episodes=10,
         env=env,
         agent=agent,
-        output_dir=output_dir
+        output_dir=output_dir,
     )
     agent.learn(total_timesteps=args.steps, callback=eval_callback)
     save_results(output_dir, agent, eval_callback)
 
+
+def visualize(args):
+    env = get_environment(args)
+    agent = get_agent(args, env)
     vec_env = agent.get_env()
     observation = vec_env.reset()
     for _ in range(args.visualization_steps):
@@ -129,13 +147,8 @@ def train(render_mode, args):
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
-    parser.add_argument(
-        "--algorithm",
-        type=str,
-        choices=sorted(list(algorithms_by_name.keys())),
-        default="PPO",
-        help="What reinforcement learning algorithm to use.",
-    )
+
+    # Shared arguments
     parser.add_argument(
         "--environment",
         type=str,
@@ -153,16 +166,17 @@ if __name__ == "__main__":
     parser.add_argument(
         "--maze_seed", type=int, default=2025, help="Seed for generating the maze."
     )
+
+    # Training arguments
+    parser.add_argument(
+        "--algorithm",
+        type=str,
+        choices=sorted(list(algorithms_by_name.keys())),
+        default="PPO",
+        help="What reinforcement learning algorithm to use.",
+    )
     parser.add_argument(
         "--steps", type=int, default=1000000, help="Number of RL steps."
-    )
-    parser.add_argument(
-        "--visualization_steps", type=int, default=1000, help="Number of steps to show at the end."
-    )
-    parser.add_argument(
-        "--visualize",
-        action="store_true",
-        help="Show a visualization of the environment.",
     )
     parser.add_argument(
         "--output_dir_prefix",
@@ -170,6 +184,22 @@ if __name__ == "__main__":
         default="results",
         help="Where to save models, results, plots, etc.",
     )
+
+    # Visualization arguments
+    parser.add_argument(
+        "--saved_model",
+        type=str,
+        help="Path to a model to visualize.",
+    )
+    parser.add_argument(
+        "--visualization_steps",
+        type=int,
+        default=1000,
+        help="Number of steps to show at the end.",
+    )
+
     args = parser.parse_args()
-    render_mode = "human" if args.visualize else None
-    train(render_mode, args)
+    if args.saved_model is not None:
+        visualize(args)
+    else:
+        train(args)
