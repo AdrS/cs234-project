@@ -13,7 +13,7 @@ from stable_baselines3.common.callbacks import (
 )
 from types import SimpleNamespace
 from vpg import VanillaPolicyGradient
-
+from stable_baselines3 import HerReplayBuffer
 
 gym.register_envs(gymnasium_robotics)
 
@@ -22,13 +22,26 @@ algorithms_by_name = {
     "A2C": sb3.A2C,
     "DDPG": sb3.DDPG,
     "PPO": sb3.PPO,
+    "SAC": sb3.SAC
 }
 
 
-def get_agent(config, env, tensorboard_dir=None):
+def get_agent(config, env, tensorboard_dir=None, HER=False):
     algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {config.algorithm}")
+    if HER:
+        return algorithm_constructor(
+             "MultiInputPolicy",
+        env,
+        verbose=1,
+        tensorboard_log=tensorboard_dir,
+        replay_buffer_class=HerReplayBuffer,
+        replay_buffer_kwargs=dict(
+            n_sampled_goal=4,
+            goal_selection_strategy="future"),
+        learning_starts=env.spec.max_episode_steps + 1) # try env.spec.max_episode_steps // 2
+        
     return algorithm_constructor(
         "MultiInputPolicy", env, verbose=1, tensorboard_log=tensorboard_dir
     )
