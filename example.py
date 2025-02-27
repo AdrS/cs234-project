@@ -19,11 +19,15 @@ algorithms_by_name = {
     "PPO": sb3.PPO,
 }
 
-full_env_names = {
-    "PointMazeSparse": "PointMaze_UMaze-v3",
-    "AntMazeSparse": "AntMaze_UMaze-v5",
-    "PointMazeDense": "PointMaze_UMazeDense-v3",
-    "AntMazeDense": "AntMaze_UMazeDense-v5",
+def create_maze(env_name, args):
+    maze_map = maze.dfs_generate(args.maze_size, args.maze_seed)
+    return gym.make(env_name, render_mode="rgb_array", maze_map=maze_map)
+
+environments_by_name = {
+    "PointMazeSparse": lambda args: create_maze("PointMaze_UMaze-v3", args),
+    "AntMazeSparse": lambda args: create_maze("AntMaze_UMaze-v5", args),
+    "PointMazeDense": lambda args: create_maze("PointMaze_UMazeDense-v3", args),
+    "AntMazeDense": lambda args: create_maze("AntMaze_UMazeDense-v5", args),
 }
 
 # Evaluate and EvalCallback are copied from assignment 3.
@@ -85,10 +89,12 @@ def save_results(output_dir_prefix, agent, eval_callback):
     np.save(returns_path, eval_callback.returns)
     plot_returns(eval_callback.returns, returns_plot_path)
 
-def main(env_name, render_mode, args):
+def main(render_mode, args):
     gym.register_envs(gymnasium_robotics)
-    maze_map = maze.dfs_generate(args.maze_size, args.maze_seed)
-    env = gym.make(env_name, render_mode="rgb_array", maze_map=maze_map)
+    environment_constructor = environments_by_name.get(args.environment)
+    if environment_constructor is None:
+        raise ValueError(f"Unknown environment: {args.environment}")
+    env = environment_constructor(args)
     algorithm_constructor = algorithms_by_name.get(args.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {args.algorithm}")
@@ -126,7 +132,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--environment",
         type=str,
-        choices=sorted(list(full_env_names.keys())),
+        choices=sorted(list(environments_by_name.keys())),
         default="PointMazeDense",
         help="What environment to simulate.",
     )
@@ -141,7 +147,7 @@ if __name__ == "__main__":
         "--maze_seed", type=int, default=2025, help="Seed for generating the maze."
     )
     parser.add_argument(
-        "--steps", type=int, default=1000, help="Number of RL steps."
+        "--steps", type=int, default=1000000, help="Number of RL steps."
     )
     parser.add_argument(
         "--visualization_steps", type=int, default=1000, help="Number of steps to show at the end."
@@ -159,4 +165,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     render_mode = "human" if args.visualize else None
-    main(full_env_names[args.environment], render_mode, args)
+    main(render_mode, args)
