@@ -2,15 +2,15 @@ import argparse
 import json
 import gymnasium as gym
 import gymnasium_robotics
-import matplotlib.pyplot as plt
 import maze
-import numpy as np
 import os
-import pathlib
 import stable_baselines3 as sb3
 import subprocess
 import time
-from stable_baselines3.common.callbacks import BaseCallback
+from stable_baselines3.common.callbacks import (
+    EvalCallback,
+    StopTrainingOnNoModelImprovement,
+)
 from types import SimpleNamespace
 from vpg import VanillaPolicyGradient
 
@@ -25,11 +25,13 @@ algorithms_by_name = {
 }
 
 
-def get_agent(config, env):
+def get_agent(config, env, tensorboard_dir=None):
     algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {config.algorithm}")
-    return algorithm_constructor("MultiInputPolicy", env, verbose=1)
+    return algorithm_constructor(
+        "MultiInputPolicy", env, verbose=1, tensorboard_log=tensorboard_dir
+    )
 
 
 def create_maze(env_name, config):
@@ -67,90 +69,40 @@ def evaluate(env, policy):
     return model_return
 
 
-class EvalCallback(BaseCallback):
-    def __init__(self, eval_period, num_episodes, env, agent, output_dir):
-        super().__init__()
-        self.eval_period = eval_period
-        self.num_episodes = num_episodes
-        self.env = env
-        # The return value of predict is a tuple where the first element is the
-        # action.
-        self.agent = agent
-        self.policy = lambda observation: agent.predict(observation)[0]
-        self.output_dir = output_dir
-
-        # Metrics
-        self.returns = []
-        self.start_time = time.time()
-
-    def get_current_metrics(self):
-        return {"training_time": time.time() - self.start_time, "returns": self.returns}
-
-    def _on_step(self):
-        if self.n_calls % self.eval_period == 0:
-            print(f"Evaluating after {self.n_calls} steps")
-            model_returns = []
-            for _ in range(self.num_episodes):
-                model_returns.append(evaluate(self.env, self.policy))
-            self.returns.append(np.mean(model_returns))
-            # Checkpoint the results
-            # TODO(adrs): only save the best model.
-            save_results(self.output_dir, self.agent, self)
-
-        # If the callback returns False, training is aborted early.
-        return True
-
-
-def plot_returns(returns, path):
-    plt.figure()
-    plt.plot(range(len(returns)), returns)
-    plt.xlabel("Training Episode")
-    plt.ylabel("Average Return")
-    plt.title("Training Performance Over Time")
-    plt.legend()
-    plt.grid(True)
-
-    plt.savefig(path)
-    plt.close()
-
-
-def save_results(output_dir, agent, eval_callback):
-    model_path = os.path.join(output_dir, "model.zip")
-    returns_path = os.path.join(output_dir, "returns.npy")
-    returns_plot_path = os.path.join(output_dir, "returns.png")
-    metrics_path = os.path.join(output_dir, "metrics.json")
-
-    agent.save(model_path)
-    np.save(returns_path, eval_callback.returns)
-    plot_returns(eval_callback.returns, returns_plot_path)
-    save_json(eval_callback.get_current_metrics(), metrics_path)
-
-
 def train(config):
     dir_name = time.strftime("%y%m%d-%H-%M-%S")
     output_dir = os.path.join(config.output_dir_prefix, dir_name)
     save_config(output_dir, config)
-    metrics = {}
+    tensorboard_dir = os.path.join(output_dir, "tensorboard")
 
     env = get_environment(config)
-    agent = get_agent(config, env)
+    eval_env = get_environment(config)
+    agent = get_agent(config, env, tensorboard_dir)
 
-    eval_callback = EvalCallback(
-        eval_period=config.steps // 100,
-        num_episodes=10,
-        env=env,
-        agent=agent,
-        output_dir=output_dir,
+    stop_train_callback = StopTrainingOnNoModelImprovement(
+        max_no_improvement_evals=config.max_no_improvement_evals,
+        min_evals=config.min_evals,
+        verbose=1,
     )
-    agent.learn(total_timesteps=config.steps, callback=eval_callback)
-    save_results(output_dir, agent, eval_callback)
+    eval_callback = EvalCallback(
+        eval_env,
+        best_model_save_path=output_dir,
+        log_path=output_dir,
+        eval_freq=config.eval_freq,
+        n_eval_episodes=config.n_eval_episodes,
+        callback_after_eval=stop_train_callback,
+        verbose=1,
+        deterministic=True,
+        render=False,
+    )
+    agent.learn(total_timesteps=config.steps, callback=eval_callback, progress_bar=True)
 
 
 def visualize(args):
     config = load_config(args.saved_model_dir)
     env = get_environment(config)
     agent = get_agent(config, env)
-    model_path = os.path.join(args.saved_model_dir, "model.zip")
+    model_path = os.path.join(args.saved_model_dir, "best_model.zip")
     agent.load(model_path)
     vec_env = agent.get_env()
     observation = vec_env.reset()
@@ -216,7 +168,7 @@ def load_config(output_dir):
 def get_args():
     parser = argparse.ArgumentParser()
 
-    # Shared arguments
+    # Training arguments
     parser.add_argument(
         "--environment",
         type=str,
@@ -234,8 +186,6 @@ def get_args():
     parser.add_argument(
         "--maze_seed", type=int, default=2025, help="Seed for generating the maze."
     )
-
-    # Training arguments
     parser.add_argument(
         "--algorithm",
         type=str,
@@ -245,6 +195,28 @@ def get_args():
     )
     parser.add_argument(
         "--steps", type=int, default=1000000, help="Number of RL steps."
+    )
+    parser.add_argument(
+        "--eval_freq", type=int, default=10000, help="How often to evaluate the model."
+    )
+    parser.add_argument(
+        "--n_eval_episodes",
+        type=int,
+        default=50,
+        help="Number of episodes to evaluate models on.",
+    )
+
+    parser.add_argument(
+        "--max_no_improvement_evals",
+        type=int,
+        default=20,
+        help="Number of evals to wait for model improvement before stopping training.",
+    )
+    parser.add_argument(
+        "--min_evals",
+        type=int,
+        default=50,
+        help="Minimum number of evals before stopping.",
     )
     parser.add_argument(
         "--output_dir_prefix",

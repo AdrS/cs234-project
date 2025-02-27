@@ -20,10 +20,22 @@
    pip install -r requirements.txt
    ```
 
-4. Run the example
+4. Start training
 
    ```
-   python example.py  --visualize
+   python example.py --environment PointMazeDense --algorithm PPO
+   ```
+
+5. Start TensorBoard
+
+   ```
+   tensorboard --logdir "results/$(ls -t results/ | head -n 1)/tensorboard"
+   ```
+
+6. View the best model
+
+   ```
+   python example.py --saved_model_dir "results/$(ls -t results/ | head -n 1)"
    ```
 
 # Contributing
