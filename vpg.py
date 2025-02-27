@@ -23,6 +23,8 @@ class PolicyNetwork(nn.Module):
         return self.fc(obs)
 
 
+# TODO: Inherit from classstable_baselines3.common.base_class.BaseAlgorithm
+# and implement the required interface.
 class VanillaPolicyGradient:
     def __init__(self, env, lr=0.01):
         self.env = env
