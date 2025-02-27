@@ -12,6 +12,8 @@ from stable_baselines3.common.callbacks import BaseCallback
 from vpg import VanillaPolicyGradient
 
 
+gym.register_envs(gymnasium_robotics)
+
 algorithms_by_name = {
     "VPG": VanillaPolicyGradient,
     "A2C": sb3.A2C,
@@ -46,13 +48,17 @@ def evaluate(env, policy):
 
 
 class EvalCallback(BaseCallback):
-    def __init__(self, eval_period, num_episodes, env, policy):
+    def __init__(self, eval_period, num_episodes, env, agent, output_dir):
         super().__init__()
         self.eval_period = eval_period
         self.num_episodes = num_episodes
         self.env = env
-        self.policy = policy
+        # The return value of predict is a tuple where the first element is the
+        # action.
+        self.agent = agent
+        self.policy = lambda observation: agent.predict(observation)[0]
         self.returns = []
+        self.output_dir = output_dir
 
     def _on_step(self):
         if self.n_calls % self.eval_period == 0:
@@ -61,6 +67,9 @@ class EvalCallback(BaseCallback):
             for _ in range(self.num_episodes):
                 model_returns.append(evaluate(self.env, self.policy))
             self.returns.append(np.mean(model_returns))
+            # Checkpoint the results
+            # TODO(adrs): only save the best model.
+            save_results(self.output_dir, self.agent, self)
 
         # If the callback returns False, training is aborted early.
         return True
@@ -77,20 +86,20 @@ def plot_returns(returns, path):
     plt.savefig(path)
     plt.close()
 
-def save_results(output_dir_prefix, agent, eval_callback):
-    dir_name = time.strftime('%y%m%d-%H-%M-%S')
-    output_dir = os.path.join(output_dir_prefix, dir_name) 
+def save_results(output_dir, agent, eval_callback):
     model_path = os.path.join(output_dir, 'model.zip')
     returns_path = os.path.join(output_dir, 'returns.npy')
     returns_plot_path = os.path.join(output_dir, 'returns.png')
 
-    os.makedirs(output_dir)
+    os.makedirs(output_dir, exist_ok=True)
     agent.save(model_path)
     np.save(returns_path, eval_callback.returns)
     plot_returns(eval_callback.returns, returns_plot_path)
 
-def main(render_mode, args):
-    gym.register_envs(gymnasium_robotics)
+def train(render_mode, args):
+    dir_name = time.strftime('%y%m%d-%H-%M-%S')
+    output_dir = os.path.join(args.output_dir_prefix, dir_name)
+
     environment_constructor = environments_by_name.get(args.environment)
     if environment_constructor is None:
         raise ValueError(f"Unknown environment: {args.environment}")
@@ -104,13 +113,11 @@ def main(render_mode, args):
         eval_period=args.steps // 100,
         num_episodes=10,
         env=env,
-        # The return value of predict is a tuple where the first element is the
-        # action.
-        policy=lambda observation: agent.predict(observation)[0],
+        agent=agent,
+        output_dir=output_dir
     )
     agent.learn(total_timesteps=args.steps, callback=eval_callback)
-
-    save_results(args.output_dir_prefix, agent, eval_callback)
+    save_results(output_dir, agent, eval_callback)
 
     vec_env = agent.get_env()
     observation = vec_env.reset()
@@ -165,4 +172,4 @@ if __name__ == "__main__":
     )
     args = parser.parse_args()
     render_mode = "human" if args.visualize else None
-    main(render_mode, args)
+    train(render_mode, args)
