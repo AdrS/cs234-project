@@ -22,26 +22,27 @@ algorithms_by_name = {
     "A2C": sb3.A2C,
     "DDPG": sb3.DDPG,
     "PPO": sb3.PPO,
-    "SAC": sb3.SAC
+    "SAC": sb3.SAC,
 }
 
 
-def get_agent(config, env, tensorboard_dir=None, HER=False):
+def get_agent(config, env, tensorboard_dir=None):
     algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {config.algorithm}")
-    if HER:
+    if config.her:
         return algorithm_constructor(
-             "MultiInputPolicy",
-        env,
-        verbose=1,
-        tensorboard_log=tensorboard_dir,
-        replay_buffer_class=HerReplayBuffer,
-        replay_buffer_kwargs=dict(
-            n_sampled_goal=4,
-            goal_selection_strategy="future"),
-        learning_starts=env.spec.max_episode_steps + 1) # try env.spec.max_episode_steps // 2
-        
+            "MultiInputPolicy",
+            env,
+            verbose=1,
+            tensorboard_log=tensorboard_dir,
+            replay_buffer_class=HerReplayBuffer,
+            replay_buffer_kwargs=dict(
+                n_sampled_goal=4, goal_selection_strategy="future"
+            ),
+            learning_starts=env.spec.max_episode_steps + 1,
+        )
+
     return algorithm_constructor(
         "MultiInputPolicy", env, verbose=1, tensorboard_log=tensorboard_dir
     )
@@ -83,7 +84,11 @@ def evaluate(env, policy):
 
 
 def train(config):
-    dir_name = time.strftime("%y%m%d-%H-%M-%S")
+    timestamp = time.strftime("%y%m%d-%H-%M-%S")
+    if config.run_name:
+        dir_name = f"{config.run_name}_{timestamp}"
+    else:
+        dir_name = timestamp
     output_dir = os.path.join(config.output_dir_prefix, dir_name)
     save_config(output_dir, config)
     tensorboard_dir = os.path.join(output_dir, "tensorboard")
@@ -236,6 +241,17 @@ def get_args():
         type=str,
         default="results",
         help="Where to save models, results, plots, etc.",
+    )
+    parser.add_argument(
+        "--run_name",
+        type=str,
+        default="",
+        help="Custom run name to prepend to the output directory.",
+    )
+    parser.add_argument(
+        "--her",
+        action="store_true",
+        help="If included, use Hindsight Experience Replay (HER) during training.",
     )
 
     # Visualization arguments
