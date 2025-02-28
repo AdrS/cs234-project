@@ -38,6 +38,12 @@
    python example.py --saved_model_dir "results/$(ls -t results/ | head -n 1)"
    ```
 
+# Generating Plots
+
+1. Go to TensorBoard
+2. Download the data from the `eval/mean_reward` graph as a CSV file
+3. Run `generate_plot.py` to create a plot from the CSV file
+
 # Contributing
 
 Please format the code before submitting changes.

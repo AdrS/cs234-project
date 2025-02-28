@@ -2,5 +2,5 @@ black
 gymnasium-robotics
 gym
 mujoco
+pandas
 stable-baselines3[extra]
-black
