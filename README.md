@@ -44,6 +44,13 @@
 2. Download the data from the `eval/mean_reward` graph as a CSV file
 3. Run `generate_plot.py` to create a plot from the CSV file
 
+To generate a plot comparing multiple training runs use
+`milestone_mean_reward_plot.py`. For example:
+
+```
+python scripts/plot/milestone_mean_reward_plot.py --inputs data/PointMazeSparse-PPO.csv data/PointMazeSparse-DDPG.csv data/PointMazeDense-PPO.csv data/PointMazeDense-DDPG.csv --labels "PPO Sparse" "DDPG Sparse" "PPO Dense" "DDPG Dense" --title "Algorithm Comparison" --output data/PPO-vs-DDPG.png
+```
+
 # Contributing
 
 Please format the code before submitting changes.
