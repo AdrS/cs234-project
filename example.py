@@ -30,7 +30,7 @@ def get_agent(config, env, tensorboard_dir=None):
     algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {config.algorithm}")
-    if config.her:
+    if hasattr(config, 'her') and config.her:
         return algorithm_constructor(
             "MultiInputPolicy",
             env,
@@ -42,7 +42,6 @@ def get_agent(config, env, tensorboard_dir=None):
             ),
             learning_starts=env.spec.max_episode_steps + 1,
         )
-
     return algorithm_constructor(
         "MultiInputPolicy", env, verbose=1, tensorboard_log=tensorboard_dir
     )
