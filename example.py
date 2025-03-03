@@ -8,6 +8,8 @@ import stable_baselines3 as sb3
 import subprocess
 import time
 from stable_baselines3.common.callbacks import (
+    BaseCallback,
+    CallbackList,
     EvalCallback,
     StopTrainingOnNoModelImprovement,
 )
@@ -30,7 +32,7 @@ def get_agent(config, env, tensorboard_dir=None):
     algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {config.algorithm}")
-    if hasattr(config, 'her') and config.her:
+    if hasattr(config, "her") and config.her:
         return algorithm_constructor(
             "MultiInputPolicy",
             env,
@@ -67,19 +69,27 @@ def get_environment(config):
     return environment_constructor(config)
 
 
-# Evaluate and EvalCallback are copied from assignment 3.
-def evaluate(env, policy):
-    model_return = 0
-    T = env.spec.max_episode_steps
-    obs, _ = env.reset()
-    for _ in range(T):
-        action = policy(obs)
-        obs, reward, terminated, truncated, _ = env.step(action)
-        done = terminated or truncated
-        model_return += reward
-        if done:
-            break
-    return model_return
+class VisualizeCallback(BaseCallback):
+
+    def __init__(self, agent, config):
+        super().__init__()
+        self.agent = agent
+        self.config = config
+
+    def _on_step(self):
+        if self.n_calls % self.config.visualize_freq == 0:
+            visualize(self.agent, self.config)
+        # If the callback does not return True, then training is aborted early.
+        return True
+
+
+def visualize(agent, config):
+    vec_env = agent.get_env()
+    observation = vec_env.reset()
+    for _ in range(config.visualization_steps):
+        action, state = agent.predict(observation, deterministic=True)
+        observation, reward, done, info = vec_env.step(action)
+        vec_env.render("human")
 
 
 def train(config):
@@ -101,6 +111,7 @@ def train(config):
         min_evals=config.min_evals,
         verbose=1,
     )
+
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=output_dir,
@@ -112,21 +123,19 @@ def train(config):
         deterministic=True,
         render=False,
     )
-    agent.learn(total_timesteps=config.steps, callback=eval_callback, progress_bar=True)
+    callbacks = [eval_callback]
+    if config.visualize_freq > 0:
+        callbacks.append(VisualizeCallback(agent, config))
+    agent.learn(total_timesteps=config.steps, callback=callbacks, progress_bar=True)
 
 
-def visualize(args):
+def visualize_saved_model(args):
     config = load_config(args.saved_model_dir)
     env = get_environment(config)
     agent = get_agent(config, env)
     model_path = os.path.join(args.saved_model_dir, "best_model.zip")
     agent.load(model_path)
-    vec_env = agent.get_env()
-    observation = vec_env.reset()
-    for _ in range(config.visualization_steps):
-        action, state = agent.predict(observation, deterministic=True)
-        observation, reward, done, info = vec_env.step(action)
-        vec_env.render("human")
+    visualize(agent, config)
 
 
 def check_for_uncommitted_changes():
@@ -217,6 +226,12 @@ def get_args():
         "--eval_freq", type=int, default=10000, help="How often to evaluate the model."
     )
     parser.add_argument(
+        "--visualize_freq",
+        type=int,
+        default=-1,
+        help="How often to visualize the model.",
+    )
+    parser.add_argument(
         "--n_eval_episodes",
         type=int,
         default=50,
@@ -271,6 +286,6 @@ def get_args():
 if __name__ == "__main__":
     args = get_args()
     if args.saved_model_dir is not None:
-        visualize(args)
+        visualize_saved_model(args)
     else:
         train(args)
