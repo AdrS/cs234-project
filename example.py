@@ -134,7 +134,9 @@ def visualize_saved_model(args):
     env = get_environment(config)
     agent = get_agent(config, env)
     model_path = os.path.join(args.saved_model_dir, "best_model.zip")
-    agent.load(model_path)
+    # Warning: load re-creates the model from scratch, it does not update it
+    # in-place! For an in-place load use set_parameters instead
+    agent.set_parameters(model_path)
     visualize(agent, config)
 
 
