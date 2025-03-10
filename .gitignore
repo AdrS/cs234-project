@@ -5,3 +5,5 @@ __pycache__/cs234-project/
 results/
 data/
 notes.txt
+models/
+wandb/

@@ -4,3 +4,4 @@ gym
 mujoco
 pandas
 stable-baselines3[extra]
+wandb

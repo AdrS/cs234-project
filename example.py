@@ -7,6 +7,7 @@ import os
 import stable_baselines3 as sb3
 import subprocess
 import time
+import wandb
 from stable_baselines3.common.callbacks import (
     BaseCallback,
     CallbackList,
@@ -16,6 +17,7 @@ from stable_baselines3.common.callbacks import (
 from types import SimpleNamespace
 from vpg import VanillaPolicyGradient
 from stable_baselines3 import HerReplayBuffer
+from wandb.integration.sb3 import WandbCallback
 
 gym.register_envs(gymnasium_robotics)
 
@@ -102,6 +104,16 @@ def train(config):
     save_config(output_dir, config)
     tensorboard_dir = os.path.join(output_dir, "tensorboard")
 
+    if config.wandb:
+        print('wandb enabled!')
+        wandb.login()
+        run = wandb.init(
+            project="cs234-project",
+            config=load_config_as_dict(output_dir),
+            sync_tensorboard=True,
+            monitor_gym=True,
+        )
+
     env = get_environment(config)
     eval_env = get_environment(config)
     agent = get_agent(config, env, tensorboard_dir)
@@ -124,9 +136,16 @@ def train(config):
         render=False,
     )
     callbacks = [eval_callback]
+    if config.wandb:
+        callbacks.append(WandbCallback(
+            model_save_path=f"models/{run.id}",
+            verbose=2,
+        ))
     if config.visualize_freq > 0:
         callbacks.append(VisualizeCallback(agent, config))
     agent.learn(total_timesteps=config.steps, callback=callbacks, progress_bar=True)
+    if config.wandb:
+        run.finish()
 
 
 def visualize_saved_model(args):
@@ -184,6 +203,10 @@ def save_config(output_dir, config):
     config_path = os.path.join(output_dir, "config.json")
     save_json(config_dict, config_path)
 
+def load_config_as_dict(output_dir):
+    config_path = os.path.join(output_dir, "config.json")
+    with open(config_path, "r") as config_file:
+        return json.load(config_file)
 
 def load_config(output_dir):
     config_path = os.path.join(output_dir, "config.json")
@@ -269,6 +292,17 @@ def get_args():
         action="store_true",
         help="If included, use Hindsight Experience Replay (HER) during training.",
     )
+    wandb_group = parser.add_mutually_exclusive_group()
+    wandb_group.add_argument(
+        "--wandb",
+        action="store_true",
+        help="Whether to log to Weights & Biases",
+    )
+    wandb_group.add_argument(
+        "--nowandb",
+        action="store_true",
+        help="Whether to disable logging to Weights & Biases",
+    )
 
     # Visualization arguments
     parser.add_argument(
@@ -282,7 +316,13 @@ def get_args():
         default=1000,
         help="Number of steps to show at the end.",
     )
-    return parser.parse_args()
+    args = parser.parse_args()
+    if args.nowandb:
+        args.wandb = False
+    else:
+        args.wandb = True
+    del args.nowandb
+    return args
 
 
 if __name__ == "__main__":
