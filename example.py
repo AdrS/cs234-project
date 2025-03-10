@@ -14,6 +14,7 @@ from stable_baselines3.common.callbacks import (
     EvalCallback,
     StopTrainingOnNoModelImprovement,
 )
+from stable_baselines3.common.monitor import Monitor
 from types import SimpleNamespace
 from vpg import VanillaPolicyGradient
 from stable_baselines3 import HerReplayBuffer
@@ -53,7 +54,7 @@ def get_agent(config, env, tensorboard_dir=None):
 
 def create_maze(env_name, config):
     maze_map = maze.dfs_generate(config.maze_size, config.maze_seed)
-    return gym.make(env_name, render_mode="rgb_array", maze_map=maze_map)
+    return Monitor(gym.make(env_name, render_mode="rgb_array", maze_map=maze_map))
 
 
 environments_by_name = {
@@ -105,7 +106,6 @@ def train(config):
     tensorboard_dir = os.path.join(output_dir, "tensorboard")
 
     if config.wandb:
-        print('wandb enabled!')
         wandb.login()
         run = wandb.init(
             project="cs234-project",
@@ -137,10 +137,12 @@ def train(config):
     )
     callbacks = [eval_callback]
     if config.wandb:
-        callbacks.append(WandbCallback(
-            model_save_path=f"models/{run.id}",
-            verbose=2,
-        ))
+        callbacks.append(
+            WandbCallback(
+                model_save_path=f"models/{run.id}",
+                verbose=2,
+            )
+        )
     if config.visualize_freq > 0:
         callbacks.append(VisualizeCallback(agent, config))
     agent.learn(total_timesteps=config.steps, callback=callbacks, progress_bar=True)
@@ -203,10 +205,12 @@ def save_config(output_dir, config):
     config_path = os.path.join(output_dir, "config.json")
     save_json(config_dict, config_path)
 
+
 def load_config_as_dict(output_dir):
     config_path = os.path.join(output_dir, "config.json")
     with open(config_path, "r") as config_file:
         return json.load(config_file)
+
 
 def load_config(output_dir):
     config_path = os.path.join(output_dir, "config.json")
