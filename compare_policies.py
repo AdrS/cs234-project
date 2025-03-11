@@ -100,6 +100,51 @@ def plot_kl_divergence_distribution(
     plt.savefig(os.path.join(output_dir, file_prefix + "-y-force-kl-divergence.png"))
     # TODO: combined plot
 
+# TODO: swap the order so it's trial - control and make sure the labels and
+# file paths use a consistent order.
+def plot_action_difference_distribution(
+        observation_space,
+        control_policy,
+        trial_policy,
+        title_prefix,
+        file_prefix,
+        output_dir,
+        num_samples=1000):
+    def norm(x):
+        return np.sqrt(x.dot(x))
+
+    norm_diffs = []
+    x_diffs = []
+    y_diffs = []
+    # TODO: angle diffs
+    for _ in range(num_samples):
+        observation = observation_space.sample()
+        control_action, _ = control_policy.predict(
+                                observation, deterministic=True)
+        trial_action, _ = trial_policy.predict(
+                                observation, deterministic=True)
+        norm_diffs.append(norm(control_action) - norm(trial_action))
+        x_diffs.append(control_action[0] - trial_action[0])
+        y_diffs.append(control_action[1] - trial_action[1])
+    plt.clf()
+    plt.hist(norm_diffs, bins=100, density=True, cumulative=True)
+    plt.title(f"{title_prefix} Norm of Force Delta")
+    plt.grid(True)
+    plt.savefig(os.path.join(output_dir, file_prefix + "-norm-force-delta.png"))
+
+    plt.clf()
+    plt.hist(x_diffs, bins=100, density=True, cumulative=True)
+    plt.title(f"{title_prefix} X-Force Delta")
+    plt.grid(True)
+    plt.savefig(os.path.join(output_dir, file_prefix + "-x-force-delta.png"))
+
+    plt.clf()
+    plt.hist(y_diffs, bins=100, density=True, cumulative=True)
+    plt.title(f"{title_prefix} Y-Force Delta")
+    plt.grid(True)
+    plt.savefig(os.path.join(output_dir, file_prefix + "-y-force-delta.png"))
+    # TODO: combined plot
+
 if __name__ == '__main__':
     args = get_args()
     control_config = load_config(args.control)
@@ -112,7 +157,14 @@ if __name__ == '__main__':
     add_get_action_distribution_method(trial_agent.policy)
     title_prefix = f'Maze size {control_config.maze_size}'
     file_prefix = f"{control_config.maze_size} {control_config.environment} {control_config.algorithm} vs {trial_config.environment} {trial_config.algorithm}"
-    plot_kl_divergence_distribution(
+    # It only makes sense to compare distributions for PPO because DDPG is
+    # deterministic.
+    if control_config.algorithm == 'PPO' and trial_config.algorithm == 'PPO':
+        plot_kl_divergence_distribution(
+            env.observation_space, control_agent.policy, trial_agent.policy,
+            title_prefix=title_prefix, file_prefix=file_prefix,
+            output_dir=args.output_dir)
+    plot_action_difference_distribution(
         env.observation_space, control_agent.policy, trial_agent.policy,
         title_prefix=title_prefix, file_prefix=file_prefix,
         output_dir=args.output_dir)
