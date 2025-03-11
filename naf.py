@@ -201,6 +201,8 @@ class NAF(OffPolicyAlgorithm):
         self._update_learning_rate(self.optimizer)
 
         for _ in range(gradient_steps):
+            self.optimizer.zero_grad()
+
             replay_data = self.replay_buffer.sample(
                 batch_size, env=self._vec_normalize_env
             )
@@ -245,8 +247,6 @@ class NAF(OffPolicyAlgorithm):
                 Q_target = rewards + (1 - dones) * self.gamma * Q_next
 
             loss = nn.MSELoss()(Q_current, Q_target)
-
-            self.optimizer.zero_grad()
             loss.backward()
             self.optimizer.step()
 
