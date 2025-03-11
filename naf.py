@@ -15,12 +15,14 @@ from gym.spaces import Box
 
 BoxTypes = (gym.spaces.Box,)
 
+
 def flatten_dict_observation(obs_dict: Dict[str, np.ndarray]) -> np.ndarray:
     arrays = []
     for k in sorted(obs_dict.keys()):
         arr = obs_dict[k]
         arrays.append(arr.reshape(-1))
     return np.concatenate(arrays, axis=0)
+
 
 def flatten_batch_of_dicts(obs_dict_batch: Dict[str, np.ndarray]) -> np.ndarray:
     keys = sorted(obs_dict_batch.keys())
@@ -31,6 +33,7 @@ def flatten_batch_of_dicts(obs_dict_batch: Dict[str, np.ndarray]) -> np.ndarray:
         arrays.append(arr)
     cat = np.concatenate(arrays, axis=1)
     return cat
+
 
 class DummyNAFPolicy(BasePolicy):
     def __init__(self, observation_space, action_space, lr_schedule, *args, **kwargs):
@@ -43,9 +46,14 @@ class DummyNAFPolicy(BasePolicy):
     def forward(self, obs: torch.Tensor, deterministic: bool = False):
         return None, None
 
-    def _predict(self, observation: torch.Tensor, deterministic: bool = False) -> torch.Tensor:
+    def _predict(
+        self, observation: torch.Tensor, deterministic: bool = False
+    ) -> torch.Tensor:
         batch_size = observation.shape[0]
-        return torch.zeros((batch_size, self.action_space.shape[0]), device=observation.device)
+        return torch.zeros(
+            (batch_size, self.action_space.shape[0]), device=observation.device
+        )
+
 
 class NAFNetwork(nn.Module):
     def __init__(self, obs_dim, action_dim, hidden_size=256):
@@ -65,9 +73,9 @@ class NAFNetwork(nn.Module):
         x = torch.relu(self.fc1(obs))
         x = torch.relu(self.fc2(x))
 
-        V = self.value(x)         
-        mu = self.mu(x)           
-        L_params = self.L(x)      
+        V = self.value(x)
+        mu = self.mu(x)
+        L_params = self.L(x)
 
         L = torch.zeros(batch_size, self.action_dim, self.action_dim, device=obs.device)
         idx = 0
@@ -81,13 +89,14 @@ class NAFNetwork(nn.Module):
 
         P = torch.bmm(L, L.transpose(1, 2))
 
-        diff = (action - mu).unsqueeze(2) 
-        A = -0.5 * torch.bmm(diff.transpose(1, 2), torch.bmm(P, diff))  
-        A = A.squeeze(-1).squeeze(-1)      
+        diff = (action - mu).unsqueeze(2)
+        A = -0.5 * torch.bmm(diff.transpose(1, 2), torch.bmm(P, diff))
+        A = A.squeeze(-1).squeeze(-1)
 
-        Q = V.squeeze(-1) + A              
+        Q = V.squeeze(-1) + A
         Q = Q.unsqueeze(-1)
         return Q, V, mu, P
+
 
 class NAF(OffPolicyAlgorithm):
     def __init__(
@@ -111,7 +120,7 @@ class NAF(OffPolicyAlgorithm):
         seed: Optional[int] = None,
         tensorboard_log: Optional[str] = None,
         _init_setup_model: bool = True,
-        **kwargs
+        **kwargs,
     ):
         if isinstance(policy, str):
             policy = DummyNAFPolicy
@@ -161,12 +170,16 @@ class NAF(OffPolicyAlgorithm):
             total_dim = 0
             for space in obs_space.spaces.values():
                 total_dim += int(np.prod(space.shape))
-            self.observation_space = Box(low=-np.inf, high=np.inf, shape=(total_dim,), dtype=np.float32)
+            self.observation_space = Box(
+                low=-np.inf, high=np.inf, shape=(total_dim,), dtype=np.float32
+            )
         else:
             self.observation_space = obs_space
 
         if not isinstance(act_space, BoxTypes):
-            raise ValueError(f"NAF only supports continuous actions, got {type(act_space).__name__}")
+            raise ValueError(
+                f"NAF only supports continuous actions, got {type(act_space).__name__}"
+            )
 
         self.action_space = act_space
 
@@ -188,7 +201,9 @@ class NAF(OffPolicyAlgorithm):
         self._update_learning_rate(self.optimizer)
 
         for _ in range(gradient_steps):
-            replay_data = self.replay_buffer.sample(batch_size, env=self._vec_normalize_env)
+            replay_data = self.replay_buffer.sample(
+                batch_size, env=self._vec_normalize_env
+            )
             obs_data = replay_data.observations
             next_obs_data = replay_data.next_observations
 
@@ -202,13 +217,15 @@ class NAF(OffPolicyAlgorithm):
                 next_obs_np = next_obs_data
 
             obs_torch = torch.tensor(obs_np, dtype=torch.float32, device=self.device)
-            next_obs_torch = torch.tensor(next_obs_np, dtype=torch.float32, device=self.device)
+            next_obs_torch = torch.tensor(
+                next_obs_np, dtype=torch.float32, device=self.device
+            )
 
             actions = replay_data.actions.float().to(self.device)
             actions = actions.view(batch_size, -1)
 
-            rewards = replay_data.rewards.view(-1, 1).float().to(self.device)  
-            dones = replay_data.dones.view(-1, 1).float().to(self.device) 
+            rewards = replay_data.rewards.view(-1, 1).float().to(self.device)
+            dones = replay_data.dones.view(-1, 1).float().to(self.device)
 
             obs_torch = obs_torch.view(batch_size, -1)
             next_obs_torch = next_obs_torch.view(batch_size, -1)
@@ -216,8 +233,11 @@ class NAF(OffPolicyAlgorithm):
             Q_current, _, _, _ = self.q_net(obs_torch, actions)
 
             with torch.no_grad():
-                dummy_next_act = torch.zeros((batch_size, self.action_space.shape[0]),
-                                             dtype=actions.dtype, device=actions.device)
+                dummy_next_act = torch.zeros(
+                    (batch_size, self.action_space.shape[0]),
+                    dtype=actions.dtype,
+                    device=actions.device,
+                )
 
                 _, _, mu_next, _ = self.q_net_target(next_obs_torch, dummy_next_act)
                 Q_next, _, _, _ = self.q_net_target(next_obs_torch, mu_next)
@@ -230,7 +250,9 @@ class NAF(OffPolicyAlgorithm):
             loss.backward()
             self.optimizer.step()
 
-            polyak_update(self.q_net.parameters(), self.q_net_target.parameters(), self.tau)
+            polyak_update(
+                self.q_net.parameters(), self.q_net_target.parameters(), self.tau
+            )
 
             if self.verbose > 0 and self.wandb_run is not None:
                 wandb.log({"loss": loss.item()})
@@ -246,8 +268,11 @@ class NAF(OffPolicyAlgorithm):
             obs_tensor = obs_tensor.unsqueeze(0)
 
         with torch.no_grad():
-            dummy_action = torch.zeros((obs_tensor.shape[0], self.action_space.shape[0]),
-                                       device=self.device, dtype=torch.float32)
+            dummy_action = torch.zeros(
+                (obs_tensor.shape[0], self.action_space.shape[0]),
+                device=self.device,
+                dtype=torch.float32,
+            )
             Q, _, mu, _ = self.q_net(obs_tensor, dummy_action)
 
         return mu.cpu().numpy(), None
