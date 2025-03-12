@@ -19,6 +19,7 @@ from types import SimpleNamespace
 from vpg import VanillaPolicyGradient
 from stable_baselines3 import HerReplayBuffer
 from wandb.integration.sb3 import WandbCallback
+from naf import NAF
 
 gym.register_envs(gymnasium_robotics)
 
@@ -28,6 +29,8 @@ algorithms_by_name = {
     "DDPG": sb3.DDPG,
     "PPO": sb3.PPO,
     "SAC": sb3.SAC,
+    "TD3": sb3.TD3,
+    "NAF": NAF,
 }
 
 
@@ -35,6 +38,22 @@ def get_agent(config, env, tensorboard_dir=None):
     algorithm_constructor = algorithms_by_name.get(config.algorithm)
     if algorithm_constructor is None:
         raise ValueError(f"Unknown algorithm: {config.algorithm}")
+
+    if config.algorithm == "NAF":
+        return NAF(
+            policy="MlpPolicy",
+            env=env,
+            learning_rate=1e-3,
+            buffer_size=1000000,
+            batch_size=64,
+            tau=0.005,
+            gamma=0.99,
+            train_freq=1,
+            gradient_steps=1,
+            verbose=1,
+            tensorboard_log=tensorboard_dir,
+        )
+
     if hasattr(config, "her") and config.her:
         return algorithm_constructor(
             "MultiInputPolicy",
