@@ -112,11 +112,14 @@ def plot_action_difference_distribution(
         num_samples=1000):
     def norm(x):
         return np.sqrt(x.dot(x))
+    # https://stackoverflow.com/questions/2827393
+    def angle_between(x, y):
+        return np.degrees(np.arccos(np.clip(np.dot(x/norm(x), y/norm(y)), -1.0, 1.0)))
 
     norm_diffs = []
     x_diffs = []
     y_diffs = []
-    # TODO: angle diffs
+    direction_diffs = []
     for _ in range(num_samples):
         observation = observation_space.sample()
         control_action, _ = control_policy.predict(
@@ -126,6 +129,7 @@ def plot_action_difference_distribution(
         norm_diffs.append(norm(control_action) - norm(trial_action))
         x_diffs.append(control_action[0] - trial_action[0])
         y_diffs.append(control_action[1] - trial_action[1])
+        direction_diffs.append(angle_between(control_action, trial_action))
     plt.clf()
     plt.hist(norm_diffs, bins=100, density=True, cumulative=True)
     plt.title(f"{title_prefix} Norm of Force Delta")
@@ -143,6 +147,12 @@ def plot_action_difference_distribution(
     plt.title(f"{title_prefix} Y-Force Delta")
     plt.grid(True)
     plt.savefig(os.path.join(output_dir, file_prefix + "-y-force-delta.png"))
+
+    plt.clf()
+    plt.hist(direction_diffs, bins=100, density=True, cumulative=True)
+    plt.title(f"{title_prefix} Force Direction Delta (degrees)")
+    plt.grid(True)
+    plt.savefig(os.path.join(output_dir, file_prefix + "-direction-delta.png"))
     # TODO: combined plot
 
 if __name__ == '__main__':
