@@ -84,8 +84,9 @@ environments_by_name = {
 }
 
 
-def get_environment(config):
-    environment_constructor = environments_by_name.get(config.environment)
+def get_environment(config, environment_name_field="environment"):
+    environment_name = getattr(config, environment_name_field)
+    environment_constructor = environments_by_name.get(environment_name)
     if environment_constructor is None:
         raise ValueError(f"Unknown environment: {config.environment}")
     return environment_constructor(config)
@@ -114,35 +115,12 @@ def visualize(agent, config):
         vec_env.render("human")
 
 
-def train(config):
-    timestamp = time.strftime("%y%m%d-%H-%M-%S")
-    if config.run_name:
-        dir_name = f"{config.run_name}_{timestamp}"
-    else:
-        dir_name = timestamp
-    output_dir = os.path.join(config.output_dir_prefix, dir_name)
-    save_config(output_dir, config)
-    tensorboard_dir = os.path.join(output_dir, "tensorboard")
-
-    if config.wandb:
-        wandb.login()
-        run = wandb.init(
-            project="cs234-project",
-            config=load_config_as_dict(output_dir),
-            sync_tensorboard=True,
-            monitor_gym=True,
-        )
-
-    env = get_environment(config)
-    eval_env = get_environment(config)
-    agent = get_agent(config, env, tensorboard_dir)
-
+def train_in_environment(env, eval_env, agent, config, steps, output_dir, wandb_run):
     stop_train_callback = StopTrainingOnNoModelImprovement(
         max_no_improvement_evals=config.max_no_improvement_evals,
         min_evals=config.min_evals,
         verbose=1,
     )
-
     eval_callback = EvalCallback(
         eval_env,
         best_model_save_path=output_dir,
@@ -158,15 +136,75 @@ def train(config):
     if config.wandb:
         callbacks.append(
             WandbCallback(
-                model_save_path=f"models/{run.id}",
+                model_save_path=f"models/{wandb_run.id}",
                 verbose=2,
             )
         )
     if config.visualize_freq > 0:
         callbacks.append(VisualizeCallback(agent, config))
-    agent.learn(total_timesteps=config.steps, callback=callbacks, progress_bar=True)
+    agent.learn(total_timesteps=steps, callback=callbacks, progress_bar=True)
+
+
+def pretrain(config, tensorboard_dir, output_dir, wandb_run):
+    """Pre-trains the model in the environment specified by config
+
+    Returns the path of the saved pre-trained model.
+    """
+    pretraining_env = get_environment(config, "pretraining_environment")
+    pretraining_eval_env = get_environment(config, "pretraining_environment")
+    agent = get_agent(config, pretraining_env, tensorboard_dir)
+    pretraining_output_dir = os.path.join(output_dir, "pretraining")
+    train_in_environment(
+        env=pretraining_env,
+        eval_env=pretraining_eval_env,
+        agent=agent,
+        config=config,
+        steps=config.pretraining_steps,
+        output_dir=pretraining_output_dir,
+        wandb_run=wandb_run,
+    )
+    return os.path.join(pretraining_output_dir, "best_model.zip")
+
+
+def train(config):
+    timestamp = time.strftime("%y%m%d-%H-%M-%S")
+    if config.run_name:
+        dir_name = f"{config.run_name}_{timestamp}"
+    else:
+        dir_name = timestamp
+    output_dir = os.path.join(config.output_dir_prefix, dir_name)
+    save_config(output_dir, config)
+    tensorboard_dir = os.path.join(output_dir, "tensorboard")
+
+    wandb_run = None
     if config.wandb:
-        run.finish()
+        wandb.login()
+        wandb_run = wandb.init(
+            project="cs234-project",
+            config=load_config_as_dict(output_dir),
+            sync_tensorboard=True,
+            monitor_gym=True,
+        )
+
+    env = get_environment(config)
+    eval_env = get_environment(config)
+    agent = get_agent(config, env, tensorboard_dir)
+
+    if config.pretraining_environment is not None:
+        agent.set_parameters(pretrain(config, tensorboard_dir, output_dir, wandb_run))
+
+    train_in_environment(
+        env=env,
+        eval_env=eval_env,
+        agent=agent,
+        config=config,
+        steps=config.steps,
+        output_dir=output_dir,
+        wandb_run=wandb_run,
+    )
+
+    if config.wandb:
+        wandb_run.finish()
 
 
 def visualize_saved_model(args):
@@ -325,6 +363,20 @@ def get_args():
         "--nowandb",
         action="store_true",
         help="Whether to disable logging to Weights & Biases",
+    )
+
+    # Transfer learning
+    parser.add_argument(
+        "--pretraining_environment",
+        type=str,
+        choices=sorted(list(environments_by_name.keys())),
+        help="Environment to pretrain the model on before doing transfer learning to --environment",
+    )
+    parser.add_argument(
+        "--pretraining_steps",
+        type=int,
+        default=1000000,
+        help="Number of RL steps to train in the pretraining environment before using transfer learning to train in --environment.",
     )
 
     # Visualization arguments
