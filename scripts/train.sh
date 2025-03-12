@@ -9,4 +9,4 @@ MODEL="$1"
 ENV="$2"
 SIZE="$3"
 
-srun python example.py --environment "$ENV" --algorithm "$MODEL" --maze_size "$SIZE" -steps 10000000 --run_name "${1}_${2}_${3}" 
+srun python train.py --environment "$ENV" --algorithm "$MODEL" --maze_size "$SIZE" -steps 10000000 --run_name "${1}_${2}_${3}" 

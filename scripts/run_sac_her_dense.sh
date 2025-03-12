@@ -8,4 +8,4 @@
 #SBATCH --cpus-per-task=4                    # CPU cores per task
 #SBATCH --mem=16G                            # Memory per node
 
-srun python example.py --environment PointMazeDense --algorithm SAC --run_name "SAC_HER_dense" --her
+srun python train.py --environment PointMazeDense --algorithm SAC --run_name "SAC_HER_dense" --her

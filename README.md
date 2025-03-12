@@ -23,7 +23,7 @@
 4. Start training
 
    ```
-   python example.py --environment PointMazeDense --algorithm PPO
+   python train.py --environment PointMazeDense --algorithm PPO
    ```
 
 5. Start TensorBoard
@@ -35,7 +35,7 @@
 6. View the best model
 
    ```
-   python example.py --saved_model_dir "results/$(ls -t results/ | head -n 1)"
+   python train.py --saved_model_dir "results/$(ls -t results/ | head -n 1)"
    ```
 
 # Generating Plots

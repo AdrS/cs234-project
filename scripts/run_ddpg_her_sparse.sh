@@ -8,4 +8,4 @@
 #SBATCH --cpus-per-task=4                    # CPU cores per task
 #SBATCH --mem=16G                            # Memory per node
 
-srun python example.py --environment PointMazeSparse --algorithm DDPG --run_name "DDPG_HER_sparse" --her
+srun python train.py --environment PointMazeSparse --algorithm DDPG --run_name "DDPG_HER_sparse" --her
