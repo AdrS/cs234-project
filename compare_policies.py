@@ -6,7 +6,7 @@ import sys
 import torch as th
 import types
 
-from example import load_config, get_environment, get_agent
+from train import load_config, get_environment, get_agent
 from torch.distributions.kl import kl_divergence
 from typing import Optional, Union
 
