@@ -2,6 +2,7 @@ import argparse
 import matplotlib.pyplot as plt
 import numpy as np
 import os
+import shutil
 import sys
 import torch as th
 import types
@@ -258,6 +259,47 @@ def generate_sparse_ppo_vs_ddpg_plots(output_dir):
         trial_dirs, control_dirs, labels, title_prefix, file_prefix, output_dir
     )
 
+def generate_finetuned_vs_pretrained_50_50_plots(output_dir):
+    trial_dirs = [
+        "results/250311-23-01-59",
+        "results/250311-23-25-16",
+        "results/250311-22-38-26"
+    ]
+    control_dirs = [os.path.join(d, "pretraining") for d in trial_dirs]
+    for src_dir, dst_dir in zip(trial_dirs, control_dirs):
+        shutil.copyfile(os.path.join(src_dir, "config.json"),
+                    os.path.join(dst_dir, "config.json"))
+    labels = [
+        "Maze size 2",
+        "Maze size 4",
+        "Maze size 8",
+    ]
+    title_prefix = "Finetuned vs Pretrained"
+    file_prefix = "finetuned_vs_pretrained_50_50"
+    plot_policy_diffs(
+        trial_dirs, control_dirs, labels, title_prefix, file_prefix, output_dir
+    )
+
+def generate_finetuned_vs_pretrained_20_80_plots(output_dir):
+    trial_dirs = [
+        "results/250311-21-46-43",
+        "results/250311-22-14-52",
+        "results/250311-23-47-02"
+    ]
+    control_dirs = [os.path.join(d, "pretraining") for d in trial_dirs]
+    for src_dir, dst_dir in zip(trial_dirs, control_dirs):
+        shutil.copyfile(os.path.join(src_dir, "config.json"),
+                    os.path.join(dst_dir, "config.json"))
+    labels = [
+        "Maze size 2",
+        "Maze size 4",
+        "Maze size 8",
+    ]
+    title_prefix = "Finetuned vs Pretrained"
+    file_prefix = "finetuned_vs_pretrained_20_80"
+    plot_policy_diffs(
+        trial_dirs, control_dirs, labels, title_prefix, file_prefix, output_dir
+    )
 
 if __name__ == "__main__":
     args = get_args()
@@ -265,3 +307,5 @@ if __name__ == "__main__":
     generate_ddpg_sparse_vs_dense_plots(args.output_dir)
     generate_dense_ppo_vs_ddpg_plots(args.output_dir)
     generate_sparse_ppo_vs_ddpg_plots(args.output_dir)
+    generate_finetuned_vs_pretrained_50_50_plots(args.output_dir)
+    generate_finetuned_vs_pretrained_20_80_plots(args.output_dir)
