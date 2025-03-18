@@ -6,6 +6,7 @@ import sys
 import torch as th
 import types
 
+from matplotlib.patches import Rectangle
 from train import load_config, get_environment, get_agent
 from torch.distributions.kl import kl_divergence
 from typing import Optional, Union
@@ -30,6 +31,12 @@ def get_args():
         type=str,
         required=True,
         help="Directory to save plots",
+    )
+    parser.add_argument(
+        "--env_seed",
+        type=int,
+        default=42,
+        help="Seed for randomness in the environment.",
     )
     return parser.parse_args()
 
@@ -168,12 +175,15 @@ def plot_action_difference_map(
     title_prefix,
     file_prefix,
     output_dir,
+    seed
 ):
-    observation_space = env.observation_space
-    base_observation = observation_space.sample()
+    base_observation, _ = env.reset(seed=seed)
+    maze = env.env.unwrapped.maze
+    XMAX = maze.map_width * maze.maze_size_scaling - maze.x_map_center
+    XMIN = -maze.x_map_center
+    YMAX = maze.y_map_center
+    YMIN = maze.y_map_center - maze.map_length * maze.maze_size_scaling
     STEPS = 100
-    XMIN = -3.8
-    XMAX = 3.8
     norm_diffs = np.zeros((STEPS, STEPS))
     x_diffs = np.zeros((STEPS, STEPS))
     y_diffs = np.zeros((STEPS, STEPS))
@@ -181,7 +191,7 @@ def plot_action_difference_map(
     for row in range(STEPS):
         for col in range(STEPS):
             x = XMIN + col*(XMAX - XMIN)/STEPS
-            y = XMIN + row*(XMAX - XMIN)/STEPS
+            y = YMIN + row*(YMAX - YMIN)/STEPS
             # https://robotics.farama.org/envs/maze/point_maze/#observation-space
             observation = {
                 'desired_goal':base_observation['desired_goal'],
@@ -196,14 +206,40 @@ def plot_action_difference_map(
             x_diffs[row][col] = control_action[0] - trial_action[0]
             y_diffs[row][col] = control_action[1] - trial_action[1]
             direction_diffs[row][col] = angle_between(control_action, trial_action)
-    def point2index(value):
-        return int(STEPS*(value - XMIN)/(XMAX - XMIN))
+    def point2index(x, y):
+        return (int(STEPS*(x - XMIN)/(XMAX - XMIN)), int(STEPS*(y - YMIN)/(YMAX - YMIN)))
+
+    def draw_maze():
+        ax = plt.gca()
+        maze_map = maze.maze_map
+        maze_size_scaling = maze.maze_size_scaling
+        maze_height = maze.maze_height
+        for i in range(maze.map_length):
+            for j in range(maze.map_width):
+                struct = maze_map[i][j]
+                if struct != 1:
+                    continue
+                # See: https://mujoco.readthedocs.io/en/stable/XMLreference.html#body-geom
+                x1 = j * maze_size_scaling - maze.x_map_center
+                x2 = x1 + maze_size_scaling
+                y1 = maze.y_map_center - i * maze_size_scaling
+                y2 = y1 - maze_size_scaling
+
+                box_x, box_y = point2index(x1, y2)
+                box_width = maze_size_scaling*STEPS/(XMAX - XMIN)
+                box_height = maze_size_scaling*STEPS/(YMAX - YMIN)
+                rect = Rectangle((box_x, box_y), box_width, box_height)
+                ax.add_patch(rect)
+
     def plot_map(values):
         plt.imshow(values)
+        draw_maze()
         plt.colorbar()
-        x_goal = point2index(base_observation['desired_goal'][0])
-        y_goal = point2index(base_observation['desired_goal'][1])
-        plt.plot(x_goal, y_goal, 'rx', markersize=4)
+        x_goal, y_goal = point2index(
+            base_observation['desired_goal'][0],
+            base_observation['desired_goal'][1])
+        markersize = max(STEPS//maze.map_length, 4)
+        plt.plot(x_goal, y_goal, 'rx', markersize=markersize)
 
     plot_map(norm_diffs)
     plt.title(f"{title_prefix} Norm of Force Delta")
@@ -263,4 +299,5 @@ if __name__ == "__main__":
         title_prefix=title_prefix,
         file_prefix=file_prefix + '-map',
         output_dir=args.output_dir,
+        seed=args.env_seed
     )
