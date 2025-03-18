@@ -111,14 +111,14 @@ def plot_kl_divergence_distribution(
     plt.grid(True)
     plt.savefig(os.path.join(output_dir, file_prefix + "-y-force-kl-divergence.png"))
 
+
 def norm(x):
     return np.sqrt(x.dot(x))
 
+
 # https://stackoverflow.com/questions/2827393
 def angle_between(x, y):
-    return np.degrees(
-        np.arccos(np.clip(np.dot(x / norm(x), y / norm(y)), -1.0, 1.0))
-    )
+    return np.degrees(np.arccos(np.clip(np.dot(x / norm(x), y / norm(y)), -1.0, 1.0)))
 
 
 # TODO: swap the order so it's trial - control and make sure the labels and
@@ -168,14 +168,9 @@ def plot_action_difference_distribution(
     plt.grid(True)
     plt.savefig(os.path.join(output_dir, file_prefix + "-direction-delta.png"))
 
+
 def plot_action_difference_map(
-    env,
-    control_policy,
-    trial_policy,
-    title_prefix,
-    file_prefix,
-    output_dir,
-    seed
+    env, control_policy, trial_policy, title_prefix, file_prefix, output_dir, seed
 ):
     base_observation, _ = env.reset(seed=seed)
     maze = env.env.unwrapped.maze
@@ -190,15 +185,15 @@ def plot_action_difference_map(
     direction_diffs = np.zeros((STEPS, STEPS))
     for row in range(STEPS):
         for col in range(STEPS):
-            x = XMIN + col*(XMAX - XMIN)/STEPS
-            y = YMIN + row*(YMAX - YMIN)/STEPS
+            x = XMIN + col * (XMAX - XMIN) / STEPS
+            y = YMIN + row * (YMAX - YMIN) / STEPS
             # https://robotics.farama.org/envs/maze/point_maze/#observation-space
             observation = {
-                'desired_goal':base_observation['desired_goal'],
+                "desired_goal": base_observation["desired_goal"],
                 # x and y velocities are 0
-                'observation':np.array([x, y, 0, 0]),
+                "observation": np.array([x, y, 0, 0]),
                 #'achieved_goal':base_observation['achieved_goal']
-                'achieved_goal':np.array([x, y])
+                "achieved_goal": np.array([x, y]),
             }
             control_action, _ = control_policy.predict(observation, deterministic=True)
             trial_action, _ = trial_policy.predict(observation, deterministic=True)
@@ -206,8 +201,12 @@ def plot_action_difference_map(
             x_diffs[row][col] = control_action[0] - trial_action[0]
             y_diffs[row][col] = control_action[1] - trial_action[1]
             direction_diffs[row][col] = angle_between(control_action, trial_action)
+
     def point2index(x, y):
-        return (int(STEPS*(x - XMIN)/(XMAX - XMIN)), int(STEPS*(y - YMIN)/(YMAX - YMIN)))
+        return (
+            int(STEPS * (x - XMIN) / (XMAX - XMIN)),
+            int(STEPS * (y - YMIN) / (YMAX - YMIN)),
+        )
 
     def draw_maze():
         ax = plt.gca()
@@ -226,8 +225,8 @@ def plot_action_difference_map(
                 y2 = y1 - maze_size_scaling
 
                 box_x, box_y = point2index(x1, y2)
-                box_width = maze_size_scaling*STEPS/(XMAX - XMIN)
-                box_height = maze_size_scaling*STEPS/(YMAX - YMIN)
+                box_width = maze_size_scaling * STEPS / (XMAX - XMIN)
+                box_height = maze_size_scaling * STEPS / (YMAX - YMIN)
                 rect = Rectangle((box_x, box_y), box_width, box_height)
                 ax.add_patch(rect)
 
@@ -236,10 +235,10 @@ def plot_action_difference_map(
         draw_maze()
         plt.colorbar()
         x_goal, y_goal = point2index(
-            base_observation['desired_goal'][0],
-            base_observation['desired_goal'][1])
-        markersize = max(STEPS//maze.map_length, 4)
-        plt.plot(x_goal, y_goal, 'rx', markersize=markersize)
+            base_observation["desired_goal"][0], base_observation["desired_goal"][1]
+        )
+        markersize = max(STEPS // maze.map_length, 4)
+        plt.plot(x_goal, y_goal, "rx", markersize=markersize)
 
     plot_map(norm_diffs)
     plt.title(f"{title_prefix} Norm of Force Delta")
@@ -275,29 +274,29 @@ if __name__ == "__main__":
     file_prefix = f"{control_config.maze_size} {control_config.environment} {control_config.algorithm} vs {trial_config.environment} {trial_config.algorithm}"
     # It only makes sense to compare distributions for PPO because DDPG is
     # deterministic.
-    #if control_config.algorithm == "PPO" and trial_config.algorithm == "PPO":
-    #    plot_kl_divergence_distribution(
-    #        env.observation_space,
-    #        control_agent.policy,
-    #        trial_agent.policy,
-    #        title_prefix=title_prefix,
-    #        file_prefix=file_prefix,
-    #        output_dir=args.output_dir,
-    #    )
-    #plot_action_difference_distribution(
-    #    env.observation_space,
-    #    control_agent.policy,
-    #    trial_agent.policy,
-    #    title_prefix=title_prefix,
-    #    file_prefix=file_prefix,
-    #    output_dir=args.output_dir,
-    #)
+    if control_config.algorithm == "PPO" and trial_config.algorithm == "PPO":
+        plot_kl_divergence_distribution(
+            env.observation_space,
+            control_agent.policy,
+            trial_agent.policy,
+            title_prefix=title_prefix,
+            file_prefix=file_prefix,
+            output_dir=args.output_dir,
+        )
+    plot_action_difference_distribution(
+        env.observation_space,
+        control_agent.policy,
+        trial_agent.policy,
+        title_prefix=title_prefix,
+        file_prefix=file_prefix,
+        output_dir=args.output_dir,
+    )
     plot_action_difference_map(
         env,
         control_agent.policy,
         trial_agent.policy,
         title_prefix=title_prefix,
-        file_prefix=file_prefix + '-map',
+        file_prefix=file_prefix + "-map",
         output_dir=args.output_dir,
-        seed=args.env_seed
+        seed=args.env_seed,
     )
